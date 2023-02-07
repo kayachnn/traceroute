@@ -27,22 +27,23 @@ unsigned short calc_checksum(unsigned short *buf, int nwords)
 }
 
 
+
+struct icmp_echo {
+    // header
+    uint8_t type;
+    uint8_t code;
+    uint16_t checksum;
+
+    uint16_t ident;
+    uint16_t seq;
+
+};
+
+
 int main(int argc, char *argv[])
 {
-    int sock_raw;
-    int ttl = 1;
-    int addr_len = sizeof(sockaddr_in);
-    int seq = 1;
-    int count = 1;
-    struct sockaddr_in addr_dest;
-    struct sockaddr_in addr_from;
-    char buf[BUF_SIZE];
-    char ip_str[BUF_SIZE];
-    struct iphdr *ip;
-    struct icmphdr *icmp;
-    int IP_HEADER_LEN = sizeof(ip);
-    int ICMP_HEADER_LEN = sizeof(icmp);
-    int IP_PACKET_LEN = IP_HEADER_LEN + ICMP_HEADER_LEN;
+    int ttl = 0;
+    char buf[BUF_SIZE]; 
 
     if (argc != 2) {
         std::cerr << "Usage: traceroute <hostname>" << std::endl;
@@ -64,88 +65,85 @@ int main(int argc, char *argv[])
     }
 
     // destination
-    struct sockaddr_in dest_addr;
-    memset(&dest_addr, 0, sizeof(dest_addr));
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = 0;
-    memcpy(&dest_addr.sin_addr, host->h_addr, host->h_length);
-    socklen_t dest_add_len = sizeof(dest_addr);
+    struct sockaddr_in dest;
+    bzero(&dest, sizeof(dest));
+    dest.sin_family = AF_INET;
+    dest.sin_port = 0;
+    // dest_addr.sin_family = AF_INET;
+    // dest_addr.sin_port = 0;
+    // memcpy(&dest_addr.sin_addr, host->h_addr, host->h_length);
+    // socklen_t dest_add_len = sizeof(dest_addr);
 
-
-    int ttl = 1;
-    
-    
-
-    
-
+    // set socket timeout option
+    struct timeval tv;
+    tv.tv_sec = 2;
+    tv.tv_usec = TIMEOUT;
+    int ret = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (ret == -1) {
+        return -1;
+    }
 
     // Loop through each hop
     
     while (ttl < 64)
     {
+        // Increment the TTL
+        ttl++;
+
+        struct icmp_echo icmp;
+        bzero(&icmp, sizeof(icmp));
+
+        // fill header files
+        icmp.type = 8;
+        icmp.code = 0;
+        icmp.ident = htons(ttl);
+        icmp.seq = htons(ttl);
+
+
         // Set the TTL for the packet
-        if(setsockopt(sock_raw, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
+        if(setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
         {
         perror("Error: setsockopt");
         return 1;
         }
+        std:cout << "ttl: " << ttl << '\n';
 
-        memset(buf, 0, BUF_SIZE);
 
-        ip.version = 4;
-        ip->ihl = 5;
-        iph->tos = 0;
-        iph->tot_len = sizeof(struct ip) + sizeof(struct icmphdr);
-        iph->id = htons(getpid());
-        iph->frag_off = 0;
-        iph->ttl = ttl;
-        iph->protocol = IPPROTO_ICMP;
-        iph->check = 0;
-        iph->saddr = inet_addr("0.0.0.0");
-        iph->daddr = inet_addr(argv[1]);
-
-        icmph->type = ICMP_ECHO;
-        icmph->code = 0;
-        icmph->un.echo.id = htons(getpid());
-
-        
         // Send the ICMP echo request
-        int bytes_sent = sendto(sock, buffer, sizeof(icmp), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        int bytes_sent = sendto(sock, &icmp, sizeof(icmp), 0, (struct sockaddr *)&dest, sizeof(dest));
         if (bytes_sent < 0) {
             std::cerr << "Error: Cannot send packet" << std::endl;
             return 1;
         }
 
-        // Wait for a response with timeout
-        struct timeval tv;
-        tv.tv_sec = 2;
-        tv.tv_usec = 0;
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
-        FD_SET(sock, &read_fds);
+        // allocate buffer
+        char buffer[BUF_SIZE];
+        struct sockaddr_in peer_addr;
+        socklen_t addr_len = sizeof(peer_addr);
+        bzero(&buffer, sizeof(buffer));
+
+        int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
+        (struct sockaddr*)&peer_addr, &addr_len);
 
 
-        int result = select(sock + 1, &read_fds, nullptr, nullptr, &tv);
-        if (result == -1) {
-            std::cerr << "Error: Cannot receive response" << std::endl;
-            return 1;
-        } else if (result == 0) {
-            std::cout << "Timeout exceeded" << std::endl;
-            continue;;
-        }
-
-        memset(buffer, 0, sizeof(buffer));
-        int bytes_received = recv(sock, buffer, BUF_SIZE, 0);
         if (bytes_received < 0) {
             std::cerr << "Error: Cannot receive response" << std::endl;
-            return 1;
+            continue;;
         }
+        // std::cout << "check if timeout\n";
+        // if(bytes_received == 0){
+        //     std::cout << "timeout\n";
+        //     continue;
+        // }
 
+        // find icmp packet in ip packet
+        struct icmphdr* icmpRecv = (struct icmphdr*)(buffer + 20);
 
         
 
-    // Increment the TTL
-    ttl++;
+        printf("dest: %s\n",inet_ntoa(dest.sin_addr));
+    
+    
 }
 
 close(sock);
