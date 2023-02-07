@@ -12,6 +12,11 @@
 
 using namespace std;
 
+#define IP_HEADER_LEN sizeof(iphdr)
+#define ICMP_HEADER_LEN sizeof(icmphdr)
+#define IP_PACKET_LEN IP_HEADER_LEN + ICMP_HEADER_LEN
+
+
 const int BUF_SIZE = 1024;
 const int TIMEOUT = 2;
 
@@ -71,18 +76,17 @@ int main(int argc, char *argv[])
     dest.sin_port = 0;
     // dest_addr.sin_family = AF_INET;
     // dest_addr.sin_port = 0;
-    // memcpy(&dest_addr.sin_addr, host->h_addr, host->h_length);
-    // socklen_t dest_add_len = sizeof(dest_addr);
+    memcpy(&dest.sin_addr, host->h_addr, host->h_length);
+    socklen_t dest_add_len = sizeof(dest);
 
-    // set socket timeout option
-    struct timeval tv;
-    tv.tv_sec = 2;
-    tv.tv_usec = TIMEOUT;
-    int ret = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    if (ret == -1) {
-        return -1;
+
+    struct timeval timeout;
+    timeout.tv_sec = 2; // 2 second timeout
+    timeout.tv_usec = 0;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout)) < 0) {
+    std::cerr << "setsockopt error" << std::endl;
+    return -1;
     }
-
     // Loop through each hop
     
     while (ttl < 64)
@@ -90,58 +94,49 @@ int main(int argc, char *argv[])
         // Increment the TTL
         ttl++;
 
-        struct icmp_echo icmp;
-        bzero(&icmp, sizeof(icmp));
-
-        // fill header files
-        icmp.type = 8;
-        icmp.code = 0;
-        icmp.ident = htons(ttl);
-        icmp.seq = htons(ttl);
-
-
-        // Set the TTL for the packet
         if(setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
         {
-        perror("Error: setsockopt");
+            perror("Error: setsockopt");
         return 1;
         }
-        std:cout << "ttl: " << ttl << '\n';
+
+
+         // build the ICMP header
+        // build the ICMP header
+        char send_buf[IP_PACKET_LEN];
+        icmphdr *icmp = (icmphdr *)(send_buf);
+        icmp->type = ICMP_ECHO;
+        icmp->code = 0;
+        icmp->un.echo.id = getpid();
+        icmp->un.echo.sequence = ttl;
+        icmp->checksum = calc_checksum((unsigned short *) icmp, ICMP_HEADER_LEN);
+
 
 
         // Send the ICMP echo request
-        int bytes_sent = sendto(sock, &icmp, sizeof(icmp), 0, (struct sockaddr *)&dest, sizeof(dest));
+        int bytes_sent = sendto(sock, send_buf, IP_PACKET_LEN, 0, (struct sockaddr *)&dest, sizeof(dest));
         if (bytes_sent < 0) {
             std::cerr << "Error: Cannot send packet" << std::endl;
             return 1;
         }
 
-        // allocate buffer
-        char buffer[BUF_SIZE];
-        struct sockaddr_in peer_addr;
-        socklen_t addr_len = sizeof(peer_addr);
-        bzero(&buffer, sizeof(buffer));
-
-        int bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
-        (struct sockaddr*)&peer_addr, &addr_len);
-
-
-        if (bytes_received < 0) {
-            std::cerr << "Error: Cannot receive response" << std::endl;
+        // wait for the reply
+        char recv_buf[IP_PACKET_LEN];
+        struct sockaddr_in from_addr;
+        socklen_t from_len = sizeof(from_addr);
+        int n = recvfrom(sock, recv_buf, IP_PACKET_LEN, 0, (struct sockaddr *) &from_addr, &from_len);
+        if (n < 0) {
+        std::cerr << "recvfrom error" << std::endl;
             continue;;
         }
-        // std::cout << "check if timeout\n";
-        // if(bytes_received == 0){
-        //     std::cout << "timeout\n";
-        //     continue;
-        // }
 
-        // find icmp packet in ip packet
-        struct icmphdr* icmpRecv = (struct icmphdr*)(buffer + 20);
-
-        
-
-        printf("dest: %s\n",inet_ntoa(dest.sin_addr));
+        // parse the reply
+        iphdr *recv_ip = (iphdr *) recv_buf;
+        icmphdr *recv_icmp = (icmphdr *) (recv_buf + IP_HEADER_LEN);
+        if (recv_icmp->type == ICMP_ECHOREPLY) {
+            std::cout << "Received reply from " << inet_ntoa(*(struct in_addr *) &from_addr.sin_addr) << ", ttl = " << ttl << std::endl;
+        break;
+        }
     
     
 }
