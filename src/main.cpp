@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/ip_icmp.h>
+#include <errno.h>
 
 using namespace std;
 
@@ -48,7 +49,7 @@ struct icmp_echo {
 int main(int argc, char *argv[])
 {
     int ttl = 0;
-    char buf[BUF_SIZE]; 
+    std::string message = "Hello from UDP";
 
     if (argc != 2) {
         std::cerr << "Usage: traceroute <hostname>" << std::endl;
@@ -56,9 +57,14 @@ int main(int argc, char *argv[])
     }
 
     // Create a raw socket
-    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         std::cerr << "Error: Cannot create socket" << std::endl;
+        return 1;
+    }
+    int sockIcmp = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if(sockIcmp < 0){
+        std::cerr << "Error: Cannot create raw socket\n";
         return 1;
     }
 
@@ -73,24 +79,29 @@ int main(int argc, char *argv[])
     struct sockaddr_in dest;
     bzero(&dest, sizeof(dest));
     dest.sin_family = AF_INET;
-    dest.sin_port = 0;
-    // dest_addr.sin_family = AF_INET;
-    // dest_addr.sin_port = 0;
+    dest.sin_port = 12345;
     memcpy(&dest.sin_addr, host->h_addr, host->h_length);
-    socklen_t dest_add_len = sizeof(dest);
 
 
     struct timeval timeout;
-    timeout.tv_sec = 2; // 2 second timeout
+    timeout.tv_sec = 1; // 2 second timeout
     timeout.tv_usec = 0;
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout)) < 0) {
-    std::cerr << "setsockopt error" << std::endl;
-    return -1;
+    if (setsockopt(sockIcmp, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout)) < 0) {
+        std::cerr << "setsockopt error" << std::endl;
+        return -1;
     }
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout)) < 0) {
+        std::cerr << "setsockopt error" << std::endl;
+        return -1;
+    }
+
+    char recv_buf[1024];
+    
     // Loop through each hop
     
     while (ttl < 64)
     {
+        bzero(recv_buf, sizeof(recv_buf));
         // Increment the TTL
         ttl++;
 
@@ -101,43 +112,31 @@ int main(int argc, char *argv[])
         }
 
 
-         // build the ICMP header
-        // build the ICMP header
-        char send_buf[IP_PACKET_LEN];
-        icmphdr *icmp = (icmphdr *)(send_buf);
-        icmp->type = ICMP_ECHO;
-        icmp->code = 0;
-        icmp->un.echo.id = getpid();
-        icmp->un.echo.sequence = ttl;
-        icmp->checksum = calc_checksum((unsigned short *) icmp, ICMP_HEADER_LEN);
-
-
-
-        // Send the ICMP echo request
-        int bytes_sent = sendto(sock, send_buf, IP_PACKET_LEN, 0, (struct sockaddr *)&dest, sizeof(dest));
-        if (bytes_sent < 0) {
-            std::cerr << "Error: Cannot send packet" << std::endl;
-            return 1;
+        if (sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr*)&dest, sizeof(dest)) < 0) {
+            std::cerr << "sendto error " << strerror(errno) << std::endl;
+            return -1;
         }
 
-        // wait for the reply
-        char recv_buf[IP_PACKET_LEN];
-        struct sockaddr_in from_addr;
-        socklen_t from_len = sizeof(from_addr);
-        int n = recvfrom(sock, recv_buf, IP_PACKET_LEN, 0, (struct sockaddr *) &from_addr, &from_len);
-        if (n < 0) {
-        std::cerr << "recvfrom error" << std::endl;
-            continue;;
-        }
 
-        // parse the reply
-        iphdr *recv_ip = (iphdr *) recv_buf;
-        icmphdr *recv_icmp = (icmphdr *) (recv_buf + IP_HEADER_LEN);
-        if (recv_icmp->type == ICMP_ECHOREPLY) {
-            std::cout << "Received reply from " << inet_ntoa(*(struct in_addr *) &from_addr.sin_addr) << ", ttl = " << ttl << std::endl;
-        break;
+
+        bzero(recv_buf, sizeof(recv_buf));
+        int recv_len = recv(sockIcmp, recv_buf, sizeof(recv_buf), 0);
+        if (recv_len < 0) {
+            std::cerr << "recvfrom error" << std::endl;
+            continue;
         }
-    
+        std::cout << "received package\n";
+        
+
+        struct iphdr *ip_header = (struct iphdr *) recv_buf;
+        struct icmphdr *icmp_header = (struct icmphdr *) (recv_buf + (ip_header->ihl * 4));
+
+        // convert source IP address to string
+        char src_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &ip_header->saddr, src_ip, INET_ADDRSTRLEN);
+        std::cout << "Received ICMP packet from IP address: " << src_ip << std::endl;
+       
+            
     
 }
 
