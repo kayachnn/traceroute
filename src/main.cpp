@@ -11,6 +11,9 @@
 #include <netinet/ip_icmp.h>
 #include <errno.h>
 
+#include <vector>
+#include <fstream>
+
 using namespace std;
 
 const int BUF_SIZE = 1024;
@@ -47,6 +50,7 @@ int main(int argc, char *argv[])
     int ttlCount=0;
     int destPort = 33345;
     std::string message = "Hello from UDP";
+    std::vector<std::pair<int ,std::string>> connections;
 
     if (argc != 2) {
         std::cerr << "Usage: traceroute <hostname>" << std::endl;
@@ -109,6 +113,7 @@ int main(int argc, char *argv[])
         bzero(recv_buf, sizeof(recv_buf));
         // Increment the TTL
         ttl++;
+        
 
         if(setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
         {
@@ -141,7 +146,6 @@ int main(int argc, char *argv[])
             
         }
         
-        std::cout << "received package\n";
         
 
         struct iphdr *ip_header = (struct iphdr *) recv_buf;
@@ -150,17 +154,50 @@ int main(int argc, char *argv[])
         // convert source IP address to string
         std::string srcIp(INET_ADDRSTRLEN, 0x00);
         inet_ntop(AF_INET, &ip_header->saddr, (char *)srcIp.data(), INET_ADDRSTRLEN);
-        std::cout << "Received ICMP packet from IP address: " << srcIp << std::endl;
+        std::pair<int, std::string>connection = make_pair(ttl, srcIp);
+        connections.push_back(connection);
+        std::cout << ttl << " " << srcIp << std::endl;
         close(sock);
 
         if(srcIp == destIp)
-        break;
+            break;
             
     
 }
 
 
 close(sockIcmp);
+
+// Open a file for writing
+  ofstream outFile("mygraph.gml");
+
+  // Write the GML syntax to the file
+  outFile << "graph [\n";
+  outFile << "  directed 1\n";
+
+  // Write the nodes to the file
+  for (int i = 0; i < connections.size(); i++) {
+    outFile << "  node [\n";
+    outFile << "    id " << connections[i].first << "\n";
+    outFile << "    label " << connections[i].second << "\n";
+    outFile << "  ]\n";
+  }
+
+  // Write the edges to the file
+  for (int i = 0; i < connections.size()-1; i++) {
+      outFile << "  edge [\n";
+      outFile << "    source " << connections[i].first << "\n";
+      outFile << "    target " << connections[i + 1].first << "\n";
+      outFile << "    label " << connections[i].second << "\n";
+      outFile << "  ]\n";
+    }
+
+  outFile << "]\n";
+
+
+
+  // Close the file
+  outFile.close();
 
 return 0;
 }
