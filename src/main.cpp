@@ -123,7 +123,8 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        clock_t start_time = clock();  // measure start time
+        struct timeval start_time, end_time;
+        gettimeofday(&start_time, NULL);
         if (sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr*)&dest, sizeof(dest)) < 0) {
             std::cerr << "sendto error " << strerror(errno) << std::endl;
             return -1;
@@ -147,8 +148,10 @@ int main(int argc, char *argv[])
             
             
         }
-        clock_t end_time = clock();  // measure end time
-        double rtt = static_cast<double>(end_time - start_time) / CLOCKS_PER_SEC * 1000;  // calculate RTT in milliseconds
+        gettimeofday(&end_time, NULL);  // measure end time
+        // Calculate the RTT in milliseconds
+        double rtt = (end_time.tv_sec - start_time.tv_sec) * 1000.0; // seconds to milliseconds
+        rtt += (end_time.tv_usec - start_time.tv_usec) / 1000.0; // microseconds to milliseconds
 
         struct iphdr *ip_header = (struct iphdr *) recv_buf;
         struct icmphdr *icmp_header = (struct icmphdr *) (recv_buf + (ip_header->ihl * 4));
