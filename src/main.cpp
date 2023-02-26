@@ -13,6 +13,7 @@
 
 #include <vector>
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
     int destPort = 33345;
     std::string message = "Hello from UDP";
     std::vector<std::pair<int ,std::string>> connections;
+    std::vector<std::string> receivedIps;
 
     if (argc != 2) {
         std::cerr << "Usage: traceroute <hostname>" << std::endl;
@@ -118,7 +120,7 @@ int main(int argc, char *argv[])
         if(setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
         {
             perror("Error: setsockopt");
-        return 1;
+            return 1;
         }
 
         clock_t start_time = clock();  // measure start time
@@ -154,9 +156,19 @@ int main(int argc, char *argv[])
         // convert source IP address to string
         std::string srcIp(INET_ADDRSTRLEN, 0x00);
         inet_ntop(AF_INET, &ip_header->saddr, (char *)srcIp.data(), INET_ADDRSTRLEN);
-        std::pair<int, std::string>connection = make_pair(ttl, srcIp);
-        connections.push_back(connection);
-        std::cout << ttl << " " << srcIp << " "  << rtt << " ms" << '\n';
+
+        //look for the ip address in the receivedIps
+        auto it = std::find(receivedIps.begin(), receivedIps.end(), srcIp);
+        if(it == receivedIps.end()){
+            //this ip not in receivedIps
+            std::pair<int, std::string>connection = make_pair(ttl, srcIp);
+            connections.push_back(connection);
+            std::cout << ttl << " " << srcIp << " "  << rtt << " ms" << '\n';
+        
+        }
+        else{
+            //this ip in the receivedIps sp do nothing
+        }
         
         close(sock);
 
