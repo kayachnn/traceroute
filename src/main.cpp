@@ -134,10 +134,12 @@ int main(int argc, char *argv[])
             if(ttlCount < 8){
                 ttl--;
                 ttlCount++;
+                close(sock);
                 continue;
             }
             else{
                 ttlCount = 0;
+                close(sock);
                 continue;
             }
             
