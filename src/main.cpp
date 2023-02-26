@@ -145,8 +145,6 @@ int main(int argc, char *argv[])
         }
         clock_t end_time = clock();  // measure end time
         double rtt = static_cast<double>(end_time - start_time) / CLOCKS_PER_SEC * 1000;  // calculate RTT in milliseconds
-        std::cout << "RTT: " << rtt << " ms" << std::endl;
-        
 
         struct iphdr *ip_header = (struct iphdr *) recv_buf;
         struct icmphdr *icmp_header = (struct icmphdr *) (recv_buf + (ip_header->ihl * 4));
@@ -156,7 +154,8 @@ int main(int argc, char *argv[])
         inet_ntop(AF_INET, &ip_header->saddr, (char *)srcIp.data(), INET_ADDRSTRLEN);
         std::pair<int, std::string>connection = make_pair(ttl, srcIp);
         connections.push_back(connection);
-        std::cout << ttl << " " << srcIp << std::endl;
+        std::cout << ttl << " " << srcIp << " "  << rtt << " ms" << '\n';
+        
         close(sock);
 
         if(srcIp == destIp)
