@@ -121,15 +121,13 @@ int main(int argc, char *argv[])
         return 1;
         }
 
-
+        clock_t start_time = clock();  // measure start time
         if (sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr*)&dest, sizeof(dest)) < 0) {
             std::cerr << "sendto error " << strerror(errno) << std::endl;
             return -1;
         }
 
-        //chekc if udp response received
-
-        bzero(recv_buf, sizeof(recv_buf));
+        
         int recv_len = recv(sockIcmp, recv_buf, sizeof(recv_buf), 0);
         if (recv_len < 0) {
             //std::cerr << "recvfrom error" << std::endl;
@@ -145,7 +143,9 @@ int main(int argc, char *argv[])
             
             
         }
-        
+        clock_t end_time = clock();  // measure end time
+        double rtt = static_cast<double>(end_time - start_time) / CLOCKS_PER_SEC * 1000;  // calculate RTT in milliseconds
+        std::cout << "RTT: " << rtt << " ms" << std::endl;
         
 
         struct iphdr *ip_header = (struct iphdr *) recv_buf;
