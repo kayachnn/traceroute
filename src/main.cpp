@@ -161,6 +161,8 @@ int main(int argc, char *argv[])
         auto it = std::find(receivedIps.begin(), receivedIps.end(), srcIp);
         if(it == receivedIps.end()){
             //this ip not in receivedIps
+            //add it to the receivedIPs
+            receivedIps.push_back(srcIp);
             std::pair<int, std::string>connection = make_pair(ttl, srcIp);
             connections.push_back(connection);
             std::cout << ttl << " " << srcIp << " "  << rtt << " ms" << '\n';
