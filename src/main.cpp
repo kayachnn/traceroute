@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
         int recv_len = recv(sockIcmp, recv_buf, sizeof(recv_buf), 0);
         if (recv_len < 0) {
             //std::cerr << "recvfrom error" << std::endl;
-            if(ttlCount < 2){
+            if(ttlCount < 8){
                 ttl--;
                 ttlCount++;
                 continue;
