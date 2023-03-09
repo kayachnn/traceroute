@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
         
         int recv_len = recv(sockIcmp, recv_buf, sizeof(recv_buf), 0);
         if (recv_len < 0) {
-            printf("return val: %d\n", recv_len);
+            printf("ttl: %d return val: %d\n", ttl, recv_len);
             printf("%s\n",strerror(errno));
             //std::cerr << "recvfrom error" << std::endl;
             if(ttlCount < 8){
