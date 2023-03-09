@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
             return -1;
         }
 
-        
+        printf("now receiving from the ttl: &d\n", ttl);
         int recv_len = recv(sockIcmp, recv_buf, sizeof(recv_buf), 0);
         if (recv_len < 0) {
             printf("ttl: %d return val: %d\n", ttl, recv_len);
